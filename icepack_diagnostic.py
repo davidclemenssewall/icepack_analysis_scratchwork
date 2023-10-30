@@ -122,8 +122,33 @@ def plot_forc_var(ds_forc, var_name, ax):
 
     return h
 
+def plot_ice_var(df_ice, var_name, site, ax):
+    """
+    Plots the requested ice variable from an individual site
+    
+    Parameters
+    ----------
+    df_ice : Pandas dataframe
+    var_name : str
+    site : str
+    ax :
+
+
+    """
+
+    # Get dataframe with columns, time, mean, sem
+    df = df_ice.loc[site, var_name].reset_index()
+    # plot
+    if df['sem'].isna().all():
+        h = ax.plot('time', 'mean', data=df, linestyle=':', label=site)
+    else:
+        h = ax.errorbar('time', 'mean', yerr='sem', data=df, 
+                        capsize=5, linestyle=':', label=site)
+
+    return h
+
 def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
-                 ds_forc=None,
+                 ds_forc=None, ice_var_map={}, ice_sites=[], df_ice=None,
                  figsize=None, ax_font=14, lfont=10, xlim=None):
     """
     Handler function for plotting different runs and variables
@@ -168,6 +193,12 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
             for forc_var_name in forc_var_map[var_name]:
                 _ = plot_forc_var(ds_forc, forc_var_name, ax)
         
+        # Plot ice variables
+        for site in ice_sites:
+            if var_name in ice_var_map:
+                for ice_var_name in ice_var_map[var_name]:
+                    _ = plot_ice_var(df_ice, ice_var_name, site, ax)
+            
         # Axis labels
         ax.set_ylabel(var_name, fontsize=ax_font)
         ax.grid()
@@ -180,7 +211,6 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
 
     plt.show()
     return f
-    
 
 # Load history output
 ip_dirs_path = "/home/dcsewall/code/docker_icepack_interactive/icepack-dirs"
@@ -231,17 +261,39 @@ forc_var_map = {'flw': ['rld'],
                 'sst_above_frz': ['sst_above_frz'],
                 }
 
+# Load ice properties
+data_path = "/home/dcsewall/data/mass_balance_data"
+data_filename = "ablationStakes_hotwireThicknessGauges_MOSAiC.csv"
+df_stak = pd.read_csv(os.path.join(data_path, data_filename), parse_dates=[3,4,7])
+
+# We want to create a dataframe where the row index is site and date and the
+# column index is stat_name, and then mean and standard error of mean.
+# rename columns to make our life easier
+df_renamed = df_stak.rename(columns={'Site name': 'site', 
+                                     'Measurement date': 'time',
+                                     'Ice thickness (calculated) (cm)': 'hi_hotwire',
+                                     'Drilled ice thickness (cm)': 'hi_drill',
+                                     'Snow depth (calculated) (cm)': 'hs_gauge',
+                                     'Pond depth (cm)': 'hpnd',
+                                     'Pond flag': 'apnd'})
+# cm to m
+for var_name in ['hi_hotwire', 'hi_drill', 'hs_gauge', 'hpnd']:
+    df_renamed[var_name] = df_renamed[var_name]/100
+stat_names = ['hi_hotwire','hi_drill','hs_gauge','hpnd','apnd']
+df_ice = df_renamed.groupby(['site', 'time'])[stat_names].agg(
+    ['mean', 'sem'])
+
+ice_var_map = {'vice': ['hi_hotwire', 'hi_drill'],
+               'vsno': ['hs_gauge'],
+               'hpnd': ['hpnd'],
+               'apnd': ['apnd'],
+               }
 
 # Explore plotting variables
 run_plot_dict = {"mosaic_raphael_syi": [1, 2],
                  "mosaic_raphael_fyi": [1, 2],
                 }
-var_names = ['vice',
-             'vsno',
-             'apnd',
-             'hpnd',
-             'ipnd',
-             ]
+var_names = ['vice', 'vsno', 'apnd', 'hpnd', 'ipnd',]
 
 f = plot_handler(run_plot_dict, var_names, hist_dict)
 
@@ -251,5 +303,14 @@ var_names = ['flwout', 'fsens', 'flat', 'sst', 'Tf', 'sst_above_frz']
 f = plot_handler(run_plot_dict, var_names, hist_dict, 
                  forc_var_map=forc_var_map, ds_forc=ds_forc)
 
+# Explore plotting with ice state
+run_plot_dict = {"mosaic_raphael_fyi": [2]}
+var_names = ['vice', 'vsno']
+site_names = ['Ridge Ranch/dart_stakes_clu_6',
+              'Drone Bones/dart_stakes_clu_11',
+              'Reunion Stakes/dart_stakes_clu_12']
+f = plot_handler(run_plot_dict, var_names, hist_dict, ice_var_map=ice_var_map,
+                 ice_sites=site_names, df_ice=df_ice)
 
-
+f, ax = plt.subplots(1,1)
+plot_ice_var(df_ice, 'hpnd', 'Ridge Ranch/dart_stakes_clu_6', ax)
