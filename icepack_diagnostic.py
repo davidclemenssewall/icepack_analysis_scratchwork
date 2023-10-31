@@ -138,12 +138,14 @@ def plot_ice_var(df_ice, var_name, site, ax):
 
     # Get dataframe with columns, time, mean, sem
     df = df_ice.loc[site, var_name].reset_index()
+    label = site + " " + var_name
     # plot
     if df['sem'].isna().all():
-        h = ax.plot('time', 'mean', data=df, linestyle=':', label=site)
+        h = ax.plot('time', 'mean', data=df, linestyle=':', label=label,
+                    marker='o')
     else:
         h = ax.errorbar('time', 'mean', yerr='sem', data=df, 
-                        capsize=5, linestyle=':', label=site)
+                        capsize=5, linestyle=':', label=label)
 
     return h
 
@@ -202,9 +204,10 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
         # Axis labels
         ax.set_ylabel(var_name, fontsize=ax_font)
         ax.grid()
+        # Legend
+        ax.legend(fontsize=lfont, bbox_to_anchor=(1.05, 1.0), loc='upper left')
     
-    # Legend on last plot
-    axs[-1].legend(fontsize=lfont)
+    
     # xlimits on last plot
     if xlim is not None:
         axs[-1].set_xlim(xlim)
@@ -215,7 +218,9 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
 # Load history output
 ip_dirs_path = "/home/dcsewall/code/docker_icepack_interactive/icepack-dirs"
 run_dict = {"mosaic_raphael_syi": 'icepack.h.20191129.nc',
-            "mosaic_raphael_fyi": 'icepack.h.20191129.nc'
+            "mosaic_raphael_fyi": 'icepack.h.20191129.nc',
+            "sheba_raphael_fyi": None,
+            "sheba_raphael_myi": None,
             }
 trcr_dict = {19: 'apnd',
              20: 'hpnd',
@@ -290,8 +295,10 @@ ice_var_map = {'vice': ['hi_hotwire', 'hi_drill'],
                }
 
 # Explore plotting variables
-run_plot_dict = {"mosaic_raphael_syi": [1, 2],
-                 "mosaic_raphael_fyi": [1, 2],
+run_plot_dict = {"mosaic_raphael_syi": [2],
+                 "mosaic_raphael_fyi": [2],
+                 "sheba_raphael_fyi": [2],
+                 "sheba_raphael_myi": [2],
                 }
 var_names = ['vice', 'vsno', 'apnd', 'hpnd', 'ipnd',]
 
@@ -303,14 +310,27 @@ var_names = ['flwout', 'fsens', 'flat', 'sst', 'Tf', 'sst_above_frz']
 f = plot_handler(run_plot_dict, var_names, hist_dict, 
                  forc_var_map=forc_var_map, ds_forc=ds_forc)
 
-# Explore plotting with ice state
+# Explore plotting fyi with ice state
 run_plot_dict = {"mosaic_raphael_fyi": [2]}
-var_names = ['vice', 'vsno']
-site_names = ['Ridge Ranch/dart_stakes_clu_6',
+var_names = ['vice', 'vsno', 'apnd', 'hpnd']
+site_names = ['Stakes 1/dart_stakes_clu_4',
+              'Ridge Ranch/dart_stakes_clu_6',
+              'Runaway Stakes/dart_stakes_clu_7',
               'Drone Bones/dart_stakes_clu_11',
               'Reunion Stakes/dart_stakes_clu_12']
 f = plot_handler(run_plot_dict, var_names, hist_dict, ice_var_map=ice_var_map,
                  ice_sites=site_names, df_ice=df_ice)
+
+# Mosaic SYI with ice state
+run_plot_dict = {"mosaic_raphael_syi": [2]}
+var_names = ['vice', 'vsno', 'apnd', 'hpnd']
+site_names = ['Bow Stakes/dart_stakes_clu_1',
+              'Stakes 3/dart_stakes_clu_3',
+              'MET Stakes/dart_stakes_clu_5',
+              'Beanpole Stakes/dart_stakes_clu_13']
+f = plot_handler(run_plot_dict, var_names, hist_dict, ice_var_map=ice_var_map,
+                 ice_sites=site_names, df_ice=df_ice)
+
 
 f, ax = plt.subplots(1,1)
 plot_ice_var(df_ice, 'hpnd', 'Ridge Ranch/dart_stakes_clu_6', ax)
