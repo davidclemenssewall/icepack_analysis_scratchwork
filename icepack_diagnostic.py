@@ -7,6 +7,7 @@ import xarray as xr
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
+import datetime
 
 # Function for reading history
 def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
@@ -67,7 +68,8 @@ def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
     return ds
 
 # Function for plotting single Icepack output
-def plot_hist_var(ds, var_name, ni, ax):
+def plot_hist_var(ds, var_name, ni, ax, resample=None, cumulative=False,
+                  mult=1):
     """
     Plot a single variable from history DS on the given axis
 
@@ -79,7 +81,16 @@ def plot_hist_var(ds, var_name, ni, ax):
         Which cell of the Icepack output to plot
     ax : matplotlib.pyplot.axes
         Axis object to plot on
-    
+    resample : str, optional
+        If provided, frequency string for DataFrame.resample(). If None do not
+        resample. The default is None.
+    cumulative : bool, optional
+        Whether the variable should be cumulative, useful for fluxes. The
+        default is False.
+    mult : float, optional
+        Multiplier for values. Useful with cumulative to get the flux into
+        correct units. The default is 1.
+
     Returns
     -------
     handle for matplotlib plot object
@@ -87,11 +98,27 @@ def plot_hist_var(ds, var_name, ni, ax):
     """
 
     # Get variable as Pandas DataFrame with time as a column
-    df = ds[var_name].sel(ni=ni).to_pandas().reset_index()
-    df.rename(columns={0: var_name}, inplace=True)
-    label = ds.run_name + ' (' + str(ni) + ')'
-    # Plot
-    h = ax.plot('time', var_name, data=df, label=label)
+    df = ds[var_name].sel(ni=ni).to_pandas()
+    if resample:
+        df = df.resample(resample).mean()
+    if cumulative:
+        df = df.cumsum()
+    df *= mult
+    df = df.reset_index()
+
+    # Display
+    if df.shape[1] == 2:
+        df.rename(columns={0: var_name}, inplace=True)
+        label = ds.run_name + ' (' + str(ni) + ')'
+        # Plot
+        h = ax.plot('time', var_name, data=df, label=label)
+    else:
+        for col_name in df.columns:
+            if col_name == 'time':
+                continue
+            label = ds.run_name + ' (' + str(ni) + ', ' + str(col_name) + ')'
+            # Plot
+            h = ax.plot(df['time'], df[col_name], label=label)
 
     return h
 
@@ -122,17 +149,21 @@ def plot_forc_var(ds_forc, var_name, ax):
 
     return h
 
-def plot_ice_var(df_ice, var_name, site, ax):
+def plot_ice_var(df_ice, var_name, site, ax, mean_only=False):
     """
     Plots the requested ice variable from an individual site
     
     Parameters
     ----------
     df_ice : Pandas dataframe
+        A dataframe where the row index is site and date and the
+        column index is var_name, and then mean and standard error of mean
     var_name : str
     site : str
     ax :
-
+    mean_only : bool, optional
+        Whether to just display mean of ice variable and not st. dev. The 
+        defaults is False.
 
     """
 
@@ -140,7 +171,7 @@ def plot_ice_var(df_ice, var_name, site, ax):
     df = df_ice.loc[site, var_name].reset_index()
     label = site + " " + var_name
     # plot
-    if df['sem'].isna().all():
+    if mean_only or df['sem'].isna().all():
         h = ax.plot('time', 'mean', data=df, linestyle=':', label=label,
                     marker='o')
     else:
@@ -151,7 +182,9 @@ def plot_ice_var(df_ice, var_name, site, ax):
 
 def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
                  ds_forc=None, ice_var_map={}, ice_sites=[], df_ice=None,
-                 figsize=None, ax_font=14, lfont=10, xlim=None):
+                 figsize=None, ax_font=14, lfont=10, xlim=None,
+                 mean_only=False, resample=None, cumulative=False,
+                 mult=1):
     """
     Handler function for plotting different runs and variables
 
@@ -169,6 +202,24 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
         names to compare with. Default is {}.
     ds_forc : xarray Dataset, optional
         MDF formatted forcing dataset. Default is None.
+    ice_var_map : dict, optional
+        Dict keyed on variable name and values are lists of ice df variable
+        names to compare with. Default is {}.
+    df_ice : Pandas dataframe, optional
+        A dataframe where the row index is site and date and the
+        column index is var_name, and then mean and standard error of mean
+    mean_only : bool, optional
+        Whether to just display mean of ice variable and not st. dev. The 
+        defaults is False.
+    resample : str, optional
+        If provided, frequency string for DataFrame.resample(). If None do not
+        resample. The default is None.
+    cumulative : bool, optional
+        Whether the variable should be cumulative, useful for fluxes. The
+        default is False.
+    mult : float, optional
+        Multiplier for values. Useful with cumulative to get the flux into
+        correct units. The default is 1.
     
     Returns
     -------
@@ -188,7 +239,9 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
         for run_name, nis in run_plot_dict.items():
             # and the desired cell(s) in each run
             for ni in nis:
-                _ = plot_hist_var(hist_dict[run_name], var_name, ni, ax)
+                _ = plot_hist_var(hist_dict[run_name], var_name, ni, ax,
+                                  resample=resample, cumulative=cumulative,
+                                  mult=mult)
         
         # Plot forcing
         if var_name in forc_var_map:
@@ -199,7 +252,8 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
         for site in ice_sites:
             if var_name in ice_var_map:
                 for ice_var_name in ice_var_map[var_name]:
-                    _ = plot_ice_var(df_ice, ice_var_name, site, ax)
+                    _ = plot_ice_var(df_ice, ice_var_name, site, ax, 
+                                     mean_only=mean_only)
             
         # Axis labels
         ax.set_ylabel(var_name, fontsize=ax_font)
@@ -212,8 +266,8 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
     if xlim is not None:
         axs[-1].set_xlim(xlim)
 
-    plt.show()
-    return f
+    #plt.show()
+    return f, axs
 
 # Load history output
 ip_dirs_path = "/home/dcsewall/code/docker_icepack_interactive/icepack-dirs"
@@ -221,6 +275,13 @@ run_dict = {"mosaic_raphael_syi": 'icepack.h.20191129.nc',
             "mosaic_raphael_fyi": 'icepack.h.20191129.nc',
             "sheba_raphael_fyi": None,
             "sheba_raphael_myi": None,
+            "mosaic_raphael_L2": None,
+            "mosaic_raphael_L2_pndaspect": None,
+            "sheba_raphael_myi_nov28": None,
+            "mosaic_raphael_fyi_rfracaice": None,
+            "mosaic_raphael_fyi_nopndfbd": None,
+            "mosaic_raphael_fyi_nopndfbd_pndaspect4": None,
+            "mosaic_raphael_fyi_topo": None,
             }
 trcr_dict = {19: 'apnd',
              20: 'hpnd',
@@ -236,7 +297,12 @@ for key, value in run_dict.items():
                                        hist_filename=value, 
                                        trcr_dict=trcr_dict, 
                                        trcrn_dict=trcrn_dict)
-    
+
+# Create ice thickness change
+for value in hist_dict.values():
+    value['vice_chg'] = value['vice'] - value['vice'].isel(time=0)
+    value['pndaspect'] = value['hpnd'] / value['apnd']
+
 # Load forcing
 forcing_path = os.path.join(ip_dirs_path, "input", "Icepack_data",
                             "forcing", "MOSAiC")
@@ -299,14 +365,91 @@ run_plot_dict = {"mosaic_raphael_syi": [2],
                  "mosaic_raphael_fyi": [2],
                  "sheba_raphael_fyi": [2],
                  "sheba_raphael_myi": [2],
+                 "mosaic_raphael_L2": [2],
+                 "sheba_raphael_myi_nov28": [2]
                 }
-var_names = ['vice', 'vsno', 'apnd', 'hpnd', 'ipnd',]
+var_names = ['aice', 'vice', 'vice_chg', 'vsno']
 
 f = plot_handler(run_plot_dict, var_names, hist_dict)
 
+var_names = ['apnd', 'hpnd', 'ipnd']
+
+f = plot_handler(run_plot_dict, var_names, hist_dict)
+
+# Test fluxes
+run_plot_dict = {"mosaic_raphael_syi": [2]}
+var_names = ['vice', 'vice_chg']
+f = plot_handler(run_plot_dict, var_names, hist_dict)
+var_names = ['congel', 'frazil', 'snoice', 'meltt', 'meltl', 'meltb']
+f = plot_handler(run_plot_dict, var_names, hist_dict, 
+                 cumulative=True, resample='D', mult=24)
+
+
+
+# Compare with changing pond parameterizations
+run_plot_dict = {"mosaic_raphael_fyi": [2],
+                 "mosaic_raphael_fyi_nopndfbd": [2],
+                 "mosaic_raphael_fyi_nopndfbd_pndaspect4": [2],
+                 "mosaic_raphael_fyi_rfracaice": [2],
+                 "mosaic_raphael_fyi_topo": [2],
+                 }
+var_names = ['vice', 'apnd', 'hpnd', 'ipnd']
+ice_var_map = {'vice': ['hi_hotwire'],
+               'vsno': ['hs_gauge'],
+               'hpnd': ['hpnd'],
+               'apnd': ['apnd'],
+               }
+site_names = ['Reunion Stakes/dart_stakes_clu_12']
+f, axs = plot_handler(run_plot_dict, var_names, hist_dict, ice_var_map=ice_var_map,
+                 ice_sites=site_names, df_ice=df_ice, mean_only=True)
+axs[-1].set_xlim([datetime.datetime.fromisoformat('2020-05-20'),
+                  datetime.datetime.fromisoformat('2020-07-28')])
+axs[0].set_ylabel('Ice Thickness (m)')
+axs[1].set_ylabel('Pond Area Fraction')
+axs[2].set_ylabel('Pond Depth (m)')
+plt.show()
+
+# Look at per category variables
+run_plot_dict = {"mosaic_raphael_fyi": [2],
+                 "mosaic_raphael_fyi_topo": [2],
+                 }
+var_names = ['vicen','aicen','apndn','hpndn','ipndn']
+f, axs = plot_handler(run_plot_dict, var_names, hist_dict)
+axs[-1].set_xlim([datetime.datetime.fromisoformat('2020-05-20'),
+                  datetime.datetime.fromisoformat('2020-07-28')])
+plt.show()
+
+# Look at per category variables
+run_plot_dict = {"mosaic_raphael_fyi": [2],
+                 "mosaic_raphael_fyi_nopndfbd_pndaspect4": [2],
+                 }
+var_names = ['vicen','aicen','apndn','hpndn','ipndn']
+f, axs = plot_handler(run_plot_dict, var_names, hist_dict)
+axs[-1].set_xlim([datetime.datetime.fromisoformat('2020-05-20'),
+                  datetime.datetime.fromisoformat('2020-07-28')])
+plt.show()
+
+
+# Pond aspect
+run_plot_dict = {"mosaic_raphael_L2": [2],
+                 "mosaic_raphael_L2_pndaspect": [2],
+                }
+var_names = ['aice', 'vice', 'vsno', 'apnd', 'hpnd', 'ipnd', 'pndaspect']
+
+f, axs = plot_handler(run_plot_dict, var_names, hist_dict)
+axs[-1].set_ylim([0, 1.0])
+axs[-1].set_xlim([datetime.datetime.fromisoformat('2020-05-20'),
+                  datetime.datetime.fromisoformat('2020-08-07')])
+plt.show()
+
 # Explore plotting with forcing
 run_plot_dict = {"mosaic_raphael_syi": [2]}
-var_names = ['flwout', 'fsens', 'flat', 'sst', 'Tf', 'sst_above_frz']
+var_names = ['flwout', 'fsens', 'flat']
+f = plot_handler(run_plot_dict, var_names, hist_dict, 
+                 forc_var_map=forc_var_map, ds_forc=ds_forc)
+# Explore plotting with forcing
+run_plot_dict = {"mosaic_raphael_syi": [2]}
+var_names = ['sst', 'Tf', 'sst_above_frz']
 f = plot_handler(run_plot_dict, var_names, hist_dict, 
                  forc_var_map=forc_var_map, ds_forc=ds_forc)
 
@@ -334,3 +477,15 @@ f = plot_handler(run_plot_dict, var_names, hist_dict, ice_var_map=ice_var_map,
 
 f, ax = plt.subplots(1,1)
 plot_ice_var(df_ice, 'hpnd', 'Ridge Ranch/dart_stakes_clu_6', ax)
+
+for k, value in hist_dict.items():
+    print(k)
+    print(value.sel(ni=2, time="2020-05-12")['vice_chg'].values[0])
+
+# Explore plotting variables
+run_plot_dict = {"mosaic_raphael_fyi": [2],
+                 "sheba_raphael_myi": [2],
+                 }
+var_names = ['aice', 'vice', 'apnd', 'hpnd', 'apndn', 'hpndn']
+
+f = plot_handler(run_plot_dict, var_names, hist_dict)
