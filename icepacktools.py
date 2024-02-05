@@ -10,7 +10,7 @@ import pandas as pd
 
 # Function for reading history
 def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
-                      sst_above_frz=True, volp=False,
+                      sst_above_frz=True, volp=False, snhf=False,
                       trcr_dict=None, trcrn_dict=None):
     """
     Load Icepack history output
@@ -30,6 +30,10 @@ def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
     volp : bool, optional
         Whether or not to compute the pond volume per grid cell area (units m).
         requires alvl and alvln tracers. Default is False.
+    snhf : bool, optional
+        Whether or not to compute the net surface heat flux, which is defined
+        as: snhf = flw + flwout + fsens + flat + fswabs. Negative values
+        are net flux from the ice to the atmosphere. Default is False.
     trcr_dict : dict, optional
         Dict for which tracers to convert to data variables. Keys are tracer
         indices and values are names. Default is None.
@@ -52,7 +56,13 @@ def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
     # Create mixed layer freezing point difference
     if sst_above_frz:
         ds['sst_above_frz'] = ds['sst'] - ds['Tf']
-    
+
+    # Create surface net heat flus
+    if snhf:
+        ds['snhf'] = (ds['flw'] + ds['flwout'] 
+                      + ds['fsens'] + ds['flat']
+                      + ds['fswabs'])
+     
     # Copy trcr and trcrn data variables
     if trcr_dict is not None:
         for key, value in trcr_dict.items():
@@ -75,6 +85,13 @@ def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
         else:
             raise RuntimeError("missing data variables needed for volp(n)")
 
+    # Convert time axis to datetimeindex
+    try:
+        datetimeindex = ds.indexes['time'].to_datetimeindex()
+        ds['time'] = datetimeindex
+    except AttributeError:
+        pass
+    
     # Add the run name as an attribute
     ds.attrs.update({'run_name': run_name})
 

@@ -103,6 +103,25 @@ ice_var_map = {'vice': ['hi_hotwire', 'hi_drill'],
                'apnd': ['apnd'],
                }
 
+# Validate FYI
+run_plot_dict = {"mosaic_raphael_fyi": [2]}
+var_names = ['vice', 'flwout', 'fsens', 'flat']
+site_names = ['Stakes 1/dart_stakes_clu_4',
+              'Ridge Ranch/dart_stakes_clu_6',
+              'Runaway Stakes/dart_stakes_clu_7',
+              'Drone Bones/dart_stakes_clu_11',
+              'Reunion Stakes/dart_stakes_clu_12']
+f, axs = plot_handler(run_plot_dict, var_names, hist_dict, ice_var_map=ice_var_map,
+                 ice_sites=site_names, df_ice=df_ice, forc_var_map=forc_var_map,
+                 ds_forc=ds_forc)
+axs[-1].set_xlim([datetime.datetime.fromisoformat('2019-11-28'),
+                  datetime.datetime.fromisoformat('2020-07-28')])
+axs[0].set_ylabel('Ice thickness (m)')
+axs[1].set_ylabel('Longwave up (W/m2)')
+axs[2].set_ylabel('Sensible heat (W/m2)')
+axs[3].set_ylabel('Latent heat (W/m2 )')
+plt.show()
+
 # Explore plotting variables
 run_plot_dict = {"mosaic_raphael_syi": [2],
                  "mosaic_raphael_fyi": [2],
@@ -126,8 +145,6 @@ f = plot_handler(run_plot_dict, var_names, hist_dict)
 var_names = ['congel', 'frazil', 'snoice', 'meltt', 'meltl', 'meltb']
 f = plot_handler(run_plot_dict, var_names, hist_dict, 
                  cumulative=True, resample='D', mult=24)
-
-
 
 # Compare with changing pond parameterizations
 run_plot_dict = {"mosaic_raphael_fyi": [2],
