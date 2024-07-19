@@ -31,6 +31,8 @@ for key, value in run_dict.items():
     hist_dict[key] = ipt.load_icepack_hist(run_name=key, 
                                        icepack_dirs_path=ip_dirs_path, 
                                        hist_filename=value)
+    hist_dict[key]['hin'] = hist_dict[key]['vicen']/hist_dict[key]['aicen']
+
 
 # The following is useful to check that outputs match
 if False:
@@ -104,8 +106,8 @@ axs[-1].set_xlim([datetime.datetime.fromisoformat('2015-06-01'),
 plt.show()
 
 # Compare sealevel_log
-run_plot_dict = {#"pnd_hyps": [1, 2, 3],
-                 "pnd_sealevel_log_all": [2, 3]
+run_plot_dict = {"pnd_hyps": [1, 2, 3],
+                 "pnd_sealevel_log_all": [1, 2, 3]
                 }
 var_names = ['aice', 'vice', 'vsno', 'apnd', 'hpnd', 'ipnd', 'frpnd', 'flpnd', 'expnd']
 
@@ -113,6 +115,28 @@ f, axs = ipt.plot_handler(run_plot_dict, var_names, hist_dict)
 axs[-1].set_xlim([datetime.datetime.fromisoformat('2015-06-01'),
                   datetime.datetime.fromisoformat('2015-08-15')])
 plt.show()
+
+run_plot_dict = {
+                 "pnd_sealevel_log_all": [3]
+                }
+var_names = ['aicen', 'vicen', 'hin', 'apndn', 'hpndn', 'ipndn']
+
+f, axs = ipt.plot_handler(run_plot_dict, var_names, hist_dict)
+#axs[-1].set_xlim([datetime.datetime.fromisoformat('2015-06-01'),
+#                  datetime.datetime.fromisoformat('2015-08-15')])
+#axs[3].set_ylim([0, 1.0])
+plt.show()
+
+run_plot_dict = {
+                 "pnd_sealevel_log_all": [2]
+                }
+var_names = ['flpndn', 'expndn', 'frpndn', 'rfpndn']
+
+f, axs = ipt.plot_handler(run_plot_dict, var_names, hist_dict, cumulative=True)
+axs[-1].set_xlim([datetime.datetime.fromisoformat('2015-06-01'),
+                  datetime.datetime.fromisoformat('2015-08-15')])
+plt.show()
+
 
 # Explore state variables
 run_plot_dict = {
@@ -132,6 +156,19 @@ run_plot_dict = {
                  "mos_raph_fyi_pnd_allmods": [2],
                 }
 var_names = ['aice', 'vice', 'vsno', 'apnd', 'hpnd', 'ipnd', 'frpnd', 'flpnd', 'expnd']
+
+f, axs = ipt.plot_handler(run_plot_dict, var_names, hist_dict)
+axs[-1].set_xlim([datetime.datetime.fromisoformat('2020-05-20'),
+                  datetime.datetime.fromisoformat('2020-08-01')])
+plt.show()
+
+# Plots for PCWG talk
+# Explore mosaic case
+run_plot_dict = {
+                 "mos_raph_fyi_frshbud": [2],
+                 #"mos_raph_fyi_pnd_allmods": [2],
+                }
+var_names = ['vice', 'apnd', 'hpnd', 'ipnd']
 
 f, axs = ipt.plot_handler(run_plot_dict, var_names, hist_dict)
 axs[-1].set_xlim([datetime.datetime.fromisoformat('2020-05-20'),

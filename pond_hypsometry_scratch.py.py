@@ -10,7 +10,7 @@ rhosi = 940.0
 rhofresh = 1000.0
 rhow = 1026.0
 
-a_p_star = 0.25
+a_p_star = 0.27
 hi = np.linspace(0.1, 5, 100)
 hi = np.array([0.1, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0])
 
@@ -19,6 +19,39 @@ r = hi*(rhow - rhosi)/(rhofresh*a_p_star**2 - 2*rhow*a_p_star + rhow)
 hp = r * a_p_star
 hsp = hi - r + 2*hp
 hocn = (hi*rhosi + a_p_star*hp*rhofresh)/rhow
+
+# Plot pond hypsometry
+def e_lin(a, hi, a_p_star, rhosi, rhop, rhow):
+    r = hi*(rhow - rhosi)/(rhop*a_p_star**2 - 2*rhow*a_p_star + rhow)
+    hsp = hi - r + 2*r*a
+    return hsp
+
+def hocn_lin(hi, a_p_star, rhosi, rhop, rhow):
+    r = hi*(rhow - rhosi)/(rhop*a_p_star**2 - 2*rhow*a_p_star + rhow)
+    hp = r * a_p_star
+    hocn = (hi*rhosi + a_p_star*hp*rhofresh)/rhow
+    return hocn
+
+# Plot results
+a = np.linspace(0, 1)
+his = np.array([0.1, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 7.0])
+f, axs = plt.subplots(1, 2, figsize= (12, 7))
+for i in np.arange(his.size):
+    e_res = e_lin(a, his[i], a_p_star, rhosi, rhofresh, rhow)
+    axs[0].plot(a, e_res, c=cm.viridis((his[i]-his.min())/(his.max() - his.min())))
+    hocn_res = hocn_lin(his[i], a_p_star, rhosi, rhofresh, rhow)
+    axs[1].plot(a, e_res-hocn_res, c=cm.viridis((his[i]-his.min())/(his.max() - his.min())))
+
+axs[1].hlines(0, xmin=0, xmax=1, colors='k', linestyles="--")
+norm = Normalize(vmin=his.min(), vmax=his.max())
+f.colorbar(cm.ScalarMappable(norm=norm, cmap='viridis'), ax=axs,
+                             orientation='horizontal', 
+                             label='Ice thickness (m)',
+                             aspect=40, shrink=0.6)
+axs[0].set_xlabel('Area fraction')
+axs[1].set_xlabel('Area fraction')
+axs[0].set_ylabel('Height above ice base (m)')
+axs[1].set_ylabel('Height above sea level (m)')
 
 # Calculations for logistic hypsometry
 def e(a, L, k, a_0, y):
@@ -167,7 +200,7 @@ def ap(Vp, L, k, a_0, y, hi, ap_0):
         pond area fraction of category
     """
 
-    tol = 0.001
+    tol = 0.00001
 
     # Check if pond fills 100% of area
     if (Vp >= Vp_a(1.0, L, k, a_0, y)):
@@ -177,6 +210,9 @@ def ap(Vp, L, k, a_0, y, hi, ap_0):
         V = Vp_a(ap, L, k, a_0, y)
         while (np.abs(V-Vp) > tol):
             ap = ap - (Vp_a(ap, L, k, a_0, y) - Vp)/dVpda(a, L, k, a_0, y)
+            ap = max(ap, 0)
+            ap = min(ap, 1)
+            V = Vp_a(ap, L, k, a_0, y)
     return ap
 
 # Given target sea level pond area fraction and depth ap' hp', k, and hi
@@ -282,6 +318,14 @@ for i in np.arange(num):
 
 axs[1].hlines(0, xmin=0, xmax=1, colors='k', linestyles="--")
 norm = Normalize(vmin=hi_min, vmax=hi_max)
+f.colorbar(cm.ScalarMappable(norm=norm, cmap='viridis'), ax=axs,
+                             orientation='horizontal', 
+                             label='Ice thickness (m)',
+                             aspect=40, shrink=0.6)
+axs[0].set_xlabel('Area fraction')
+axs[1].set_xlabel('Area fraction')
+axs[0].set_ylabel('Height above ice base (m)')
+axs[1].set_ylabel('Height above sea level (m)')
 
 # Play around with curves to fit these functions
 # Fit Ls, polynomial
@@ -328,3 +372,14 @@ opt_y, cov_y = curve_fit(f_y, his, ys, p0=p0)
 plt.plot(his, ys, '+')
 plt.plot(his, f_y(his, *opt_y))
 print(np.sqrt(((f_y(his, *opt_y)-ys)**2).sum()))
+
+# Test Pond area and volume computing functions
+hi = 1.5
+L = f_L(hi, *opt_L)
+a_0 = f_a_0(hi, *opt_a_0)
+y = f_y(hi, *opt_y)
+# Given a calculate Vp
+a = 0.8
+Vp = Vp_a(a,L,k,a_0,y)
+ap_0 = ap_sl
+ap_1 = ap(Vp, L, k, a_0, y, hi, ap_0)

@@ -11,6 +11,7 @@ import pandas as pd
 # Function for reading history
 def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
                       sst_above_frz=True, volp=False, snhf=False,
+                      pnd_budget=False,
                       trcr_dict=None, trcrn_dict=None):
     """
     Load Icepack history output
@@ -85,6 +86,23 @@ def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
         else:
             raise RuntimeError("missing data variables needed for volp(n)")
 
+    # Compute pond budget
+    if pnd_budget:
+        rhos = 330
+        rhoi = 917
+        rhofresh = 1000
+        dt = (ds.time[1] - ds.time[0]).values.astype('timedelta64[s]').item(
+            ).total_seconds()
+        
+        ds['liq_in'] = (ds['meltt']*rhoi + ds['melts']*rhos + ds['frain']*dt
+                        )/rhofresh - ds['ilpnd'].where(ds['ilpnd']<0, 0)
+        ds['liq_out'] = (ds['flpnd'] + ds['expnd'] + ds['frpnd'] + ds['rfpnd'] +
+                        ds['ilpnd'].where(ds['ilpnd']>0, 0) + ds['mipnd'] 
+                        + ds['rdpnd'])
+
+        ds['liq_diff'] = ds['liq_in'] - ds['liq_out']
+        ds['frshwtr_residual'] = ds['liq_diff'].cumsum('time') - ds['volp']
+
     # Convert time axis to datetimeindex
     try:
         datetimeindex = ds.indexes['time'].to_datetimeindex()
@@ -99,7 +117,7 @@ def load_icepack_hist(run_name, icepack_dirs_path, hist_filename=None,
 
 # Function for plotting single Icepack output
 def plot_hist_var(ds, var_name, ni, ax, resample=None, cumulative=False,
-                  mult=1):
+                  mult=1, linestyle='-', color=None):
     """
     Plot a single variable from history DS on the given axis
 
@@ -120,6 +138,10 @@ def plot_hist_var(ds, var_name, ni, ax, resample=None, cumulative=False,
     mult : float, optional
         Multiplier for values. Useful with cumulative to get the flux into
         correct units. The default is 1.
+    linestyle : str, optional
+        string specifying linestyle, the default is '-'
+    color : str, optional
+        color for the line, the default is None
 
     Returns
     -------
@@ -141,14 +163,16 @@ def plot_hist_var(ds, var_name, ni, ax, resample=None, cumulative=False,
         df.rename(columns={0: var_name}, inplace=True)
         label = ds.run_name + ' (' + str(ni) + ')'
         # Plot
-        h = ax.plot('time', var_name, data=df, label=label)
+        h = ax.plot('time', var_name, data=df, label=label, ls=linestyle, 
+                    c=color)
     else:
         for col_name in df.columns:
             if col_name == 'time':
                 continue
             label = ds.run_name + ' (' + str(ni) + ', ' + str(col_name) + ')'
             # Plot
-            h = ax.plot(df['time'], df[col_name], label=label)
+            h = ax.plot(df['time'], df[col_name], label=label, ls=linestyle,
+                        c=color)
 
     return h
 
@@ -179,7 +203,8 @@ def plot_forc_var(ds_forc, var_name, ax):
 
     return h
 
-def plot_ice_var(df_ice, var_name, site, ax, mean_only=False):
+def plot_ice_var(df_ice, var_name, site, ax, mean_only=False, linestyle=':',
+                 color=None, semx2=False):
     """
     Plots the requested ice variable from an individual site
     
@@ -192,26 +217,71 @@ def plot_ice_var(df_ice, var_name, site, ax, mean_only=False):
     site : str
     ax :
     mean_only : bool, optional
-        Whether to just display mean of ice variable and not st. dev. The 
+        Whether to just display mean of ice variable and not st. err. The 
         defaults is False.
+    semx2 : bool, optional
+        Whether to plot errorbars from semx2 column
+    linestyle : str, optional
+        string specifying linestyle, the default is '-'
+    color : str, optional
+        color for the line, the default is None
 
     """
 
     # Get dataframe with columns, time, mean, sem
-    df = df_ice.loc[site, var_name].reset_index()
+    try:
+        df = df_ice.loc[site, var_name].reset_index()
+    except KeyError:
+        return
     label = site + " " + var_name
     # plot
     if mean_only or df['sem'].isna().all():
-        h = ax.plot('time', 'mean', data=df, linestyle=':', label=label,
-                    marker='o')
+        h = ax.plot('time', 'mean', data=df, linestyle=linestyle, label=label,
+                    marker='o', c=color)
     else:
-        h = ax.errorbar('time', 'mean', yerr='sem', data=df, 
-                        capsize=5, linestyle=':', label=label)
+        if semx2:
+            h = ax.errorbar('time', 'mean', yerr='semx2', data=df, capsize=5, 
+                            linestyle=linestyle, label=label, c=color)
+        else:
+            h = ax.errorbar('time', 'mean', yerr='sem', data=df, capsize=5, 
+                            linestyle=linestyle, label=label, c=color)
+
 
     return h
 
+def plot_ice_varn(df_icen, var_name, site, ax):
+    """
+    Plots the requested category level ice variable from a site
+
+    Parameters
+    ----------
+    df_icen : Pandas dataframe
+        A dataframe where the row index is (site, date, category) and the
+        column index is var_name
+    var_name : str
+    site : str
+    ax :
+    """
+
+    handles = []
+    # Get dataframe for just this site
+    try:
+        df = df_icen.loc[site].reset_index(level='time')
+    except KeyError:
+        return
+    # Plot each category
+    for nc in df.index:
+        label = site + " " + var_name + " " + str(nc)
+        try:
+            handles.append(ax.plot('time', var_name, data=df.loc[nc], 
+                                linestyle=':', label=label, marker='o'))
+        except KeyError:
+            return
+    return handles
+
 def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
                  ds_forc=None, ice_var_map={}, ice_sites=[], df_ice=None,
+                 df_icen=None,
                  figsize=None, ax_font=14, lfont=10, xlim=None,
                  mean_only=False, resample=None, cumulative=False,
                  mult=1):
@@ -238,6 +308,9 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
     df_ice : Pandas dataframe, optional
         A dataframe where the row index is site and date and the
         column index is var_name, and then mean and standard error of mean
+    df_icen : Pandas dataframe
+        A dataframe where the row index is (site, date, category) and the
+        column index is var_name
     mean_only : bool, optional
         Whether to just display mean of ice variable and not st. dev. The 
         defaults is False.
@@ -282,14 +355,20 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
         for site in ice_sites:
             if var_name in ice_var_map:
                 for ice_var_name in ice_var_map[var_name]:
-                    _ = plot_ice_var(df_ice, ice_var_name, site, ax, 
-                                     mean_only=mean_only)
+                    if df_ice is not None:
+                        _ = plot_ice_var(df_ice, ice_var_name, site, ax, 
+                                        mean_only=mean_only)
+                    if df_icen is not None:
+                        _ = plot_ice_varn(df_icen, ice_var_name, site, ax)
+                    del _
             
         # Axis labels
         ax.set_ylabel(var_name, fontsize=ax_font)
+        ax.yaxis.set_tick_params(labelsize=lfont)
+        ax.xaxis.set_tick_params(labelsize=lfont)
         ax.grid()
         # Legend
-        ax.legend(fontsize=lfont, bbox_to_anchor=(1.05, 1.0), loc='upper left')
+        ax.legend(fontsize=lfont, bbox_to_anchor=(1.0, 1.0), loc='upper left')
     
     
     # xlimits on last plot
@@ -298,3 +377,40 @@ def plot_handler(run_plot_dict, var_names, hist_dict, forc_var_map={},
 
     #plt.show()
     return f, axs
+
+def plot_freshwater_budget(ds, ni, ax):
+    """Plot the freshwater budget as a stacked bar chart"""
+    
+    rhos = 330
+    rhoi = 917
+    rhofresh = 1000
+    dt = (ds.time[1] - ds.time[0]).values.astype('timedelta64[s]').item(
+        ).total_seconds()
+
+    # Meltwater into ponds
+    df_in = ds.sel(ni=ni)[['meltt', 'melts', 'frain', 'ilpnd']].to_pandas()
+    df_in['ilpnd'] *= -1
+    df_in['ilpnd'][df_in.ilpnd < 0] = 0
+    df_in.drop(columns=['ni'], inplace=True)
+    df_in['melts'] = df_in['melts'] * rhos/rhofresh
+    df_in['meltt'] = df_in['meltt'] * rhoi/rhofresh
+    df_in['frain'] *= dt
+    df_in = df_in.cumsum()
+
+    # Meltwater out of ponds
+    df_out = ds.sel(ni=ni)[['flpnd', 'expnd', 'frpnd', 'rfpnd', 'ilpnd', 
+                            'mipnd', 'rdpnd']].to_pandas()
+    df_out['ilpnd'][df_out.ilpnd < 0] = 0
+    df_out.drop(columns=['ni'], inplace=True)
+    df_out *= -1
+    df_out = df_out.cumsum()
+
+    # Pond volume
+    df_liq_diff = ds.sel(ni=ni)['liq_diff'].to_pandas().cumsum()
+    df_volp = ds.sel(ni=ni)['volp'].to_pandas()
+
+    df_in.plot.area(ax=ax)
+    df_out.plot.area(ax=ax)
+    df_liq_diff.plot.line(c='k', ax=ax, label='liq_diff')
+    df_volp.plot.line(c='k', ls='--', ax=ax, label='volp')
+    ax.set_ylim([df_out.iloc[-1].sum(), df_in.iloc[-1].sum()])

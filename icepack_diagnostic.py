@@ -25,6 +25,7 @@ run_dict = {"mosaic_raphael_syi": 'icepack.h.20191129.nc',
             "mosaic_raphael_fyi_nopndfbd": None,
             "mosaic_raphael_fyi_nopndfbd_pndaspect4": None,
             "mosaic_raphael_fyi_topo": None,
+            "mosaic_forcing_clean": None,
             }
 trcr_dict = {19: 'apnd',
              20: 'hpnd',
@@ -45,6 +46,7 @@ for key, value in run_dict.items():
 for value in hist_dict.values():
     value['vice_chg'] = value['vice'] - value['vice'].isel(time=0)
     value['pndaspect'] = value['hpnd'] / value['apnd']
+    value['hin'] = value['vicen'] / value['aicen']
 
 # Load forcing
 forcing_path = os.path.join(ip_dirs_path, "input", "Icepack_data",
@@ -55,7 +57,7 @@ ds_atm = xr.open_dataset(os.path.join(forcing_path, atm_filename))
 for var_name in ['rlu', 'wthv', 'hfss_ec', 'hfss_bulk', 'wqv', 'hfls_bulk']:
     ds_atm[var_name] = -1*ds_atm[var_name]
 ds_atm['hus'] = ds_atm['hus']/1000 # fix specific humidity error
-ocn_filename = 'MOSAiC_ocn_MDF_20191007-20200920.nc'
+ocn_filename = 'MOSAiC_ocn_MDF_20191006-20200919.nc'
 ds_ocn = xr.open_dataset(os.path.join(forcing_path, ocn_filename))
 ds_forc = xr.merge([ds_atm, ds_ocn])
 # Create temp above frz
@@ -122,6 +124,12 @@ axs[2].set_ylabel('Sensible heat (W/m2)')
 axs[3].set_ylabel('Latent heat (W/m2 )')
 plt.show()
 
+# Examine Mosaic Forcing clean
+run_plot_dict = {"mosaic_forcing_clean": [1, 2, 3]}
+var_names = ['aice', 'vice', 'vsno', 'apnd', 'hpnd', 'ipnd']
+
+f, axs = plot_handler(run_plot_dict, var_names, hist_dict)
+
 # Explore plotting variables
 run_plot_dict = {"mosaic_raphael_syi": [2],
                  "mosaic_raphael_fyi": [2],
@@ -178,6 +186,15 @@ f, axs = plot_handler(run_plot_dict, var_names, hist_dict)
 axs[-1].set_xlim([datetime.datetime.fromisoformat('2020-05-20'),
                   datetime.datetime.fromisoformat('2020-07-28')])
 plt.show()
+
+run_plot_dict = {"mosaic_raphael_fyi": [2],
+                 }
+var_names = ['hin','aicen']
+f, axs = plot_handler(run_plot_dict, var_names, hist_dict)
+axs[-1].set_xlim([datetime.datetime.fromisoformat('2020-05-20'),
+                  datetime.datetime.fromisoformat('2020-07-28')])
+plt.show()
+
 
 # Look at per category variables
 run_plot_dict = {"mosaic_raphael_fyi": [2],
