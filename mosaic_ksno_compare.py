@@ -55,9 +55,13 @@ for col in df_ice.columns:
 
 # Load buoy properties
 # Load paths
-with open(os.path.join('/','home', 'dcsewall', 'code', 'SCMStandz', 'utils', 
-                       'paths.json')) as fp:
-    paths_dict = json.load(fp)
+#with open(os.path.join('/','home', 'dcsewall', 'code', 'SCMStandz', 'utils', 
+#                       'paths.json')) as fp:
+#    paths_dict = json.load(fp)
+paths_dict = {'raw_data': os.path.join('/', 'home', 'dcsewall', 'data', 
+                                       'SCMStandz_raw_data'),
+              'proc_data': os.path.join('/', 'home', 'dcsewall', 'data', 
+                                       'SCMStandz_proc_data')}
 
 # Load buoy timeseries
 imb_fp = os.path.join(paths_dict['raw_data'], 'imb')
@@ -213,7 +217,7 @@ plt.show()
 
 #############################################################################
 
-# Plot for paper
+# Plot for ksno paper
 f, axs = plt.subplots(4, 1, sharex=True, figsize=(12,13))
 lfont = 10
 axfont = 12
